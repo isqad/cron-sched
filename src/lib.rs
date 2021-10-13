@@ -89,6 +89,7 @@ impl<'a, J: Job> CronEntry<'a, J> {
     }
 }
 
+// TODO: think about universal jobs
 pub trait Job {
     fn run(&mut self);
 }
