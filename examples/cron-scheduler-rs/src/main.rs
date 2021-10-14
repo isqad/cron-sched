@@ -1,18 +1,31 @@
-use cron_sched::{Cron, Job};
+use cron_sched::{Cron, CronJob};
 
-struct CrawlJob {}
+struct GreetingJob {}
 
-impl Job for CrawlJob {
+impl CronJob for GreetingJob {
     fn run(&mut self) {
-        println!("I'm running!")
+        println!("GreetingJob: Hello, world!")
+    }
+}
+
+struct CounterJob {
+    i: u64
+}
+
+impl CronJob for CounterJob {
+    fn run(&mut self) {
+        self.i += 1;
+        println!("CounterJob: i = {}", self.i);
     }
 }
 
 fn main() {
-    let mut cron = Cron::<CrawlJob>::new();
-    let mut job = CrawlJob {};
+    let mut cron = Cron::new();
+    let mut greeting_job = GreetingJob {};
+    let mut counter_job = CounterJob { i: 0 };
 
-    cron.add("*/3 * * * * * *", &mut job).unwrap();
+    cron.add("*/3 * * * * * *", &mut greeting_job).unwrap();
+    cron.add("*/1 * * * * * *", &mut counter_job).unwrap();
 
     let waiting = std::time::Duration::from_millis(500u64);
     loop {

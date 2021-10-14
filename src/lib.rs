@@ -22,16 +22,16 @@ impl std::error::Error for CronEntryError {
     }
 }
 
-pub struct Cron<'a, J> {
-    entries: Vec<CronEntry<'a, J>>,
+pub struct Cron<'a> {
+    entries: Vec<CronEntry<'a>>,
 }
 
-impl<'a, J: Job> Cron<'a, J> {
+impl<'a> Cron<'a> {
     pub fn new() -> Self {
         Cron { entries: Vec::new() }
     }
 
-    pub fn add(&mut self, schedule_expr: &str, job: &'a mut J) -> Result<(), CronError> {
+    pub fn add(&mut self, schedule_expr: &str, job: &'a mut dyn CronJob) -> Result<(), CronError> {
         let entry = CronEntry::new(schedule_expr, job)?;
         self.entries.push(entry);
 
@@ -46,14 +46,14 @@ impl<'a, J: Job> Cron<'a, J> {
     }
 }
 
-struct CronEntry<'a, J> {
-    job: &'a mut J,
+struct CronEntry<'a> {
+    job: &'a mut dyn CronJob,
     schedule: Schedule,
     next_run_at: DateTime<Utc>,
 }
 
-impl<'a, J: Job> CronEntry<'a, J> {
-    fn new(schedule_expr: &str, job: &'a mut J) -> Result<Self, CronError> {
+impl<'a> CronEntry<'a> {
+    fn new(schedule_expr: &str, job: &'a mut dyn CronJob) -> Result<Self, CronError> {
         let schedule = Schedule::from_str(schedule_expr)?;
         let next_run_at = Self::upcoming(&schedule)?;
 
@@ -78,6 +78,7 @@ impl<'a, J: Job> CronEntry<'a, J> {
     fn tick(&mut self, current_time: DateTime<Utc>) -> Result<(), CronEntryError> {
         if current_time >= self.next_run_at {
             self.reset_next_run_at()?;
+            // TODO: run in separated thread
             self.job.run();
         }
         Ok(())
@@ -89,8 +90,7 @@ impl<'a, J: Job> CronEntry<'a, J> {
     }
 }
 
-// TODO: think about universal jobs
-pub trait Job {
+pub trait CronJob {
     fn run(&mut self);
 }
 
@@ -102,7 +102,7 @@ mod tests {
         i: i8,
     }
 
-    impl crate::Job for TestJob {
+    impl crate::CronJob for TestJob {
         fn run(&mut self) {
             self.i += 1;
         }
@@ -120,10 +120,13 @@ mod tests {
 
     #[test]
     fn test_cron_entry_tick() {
-        let execute_at = Utc.ymd(2021, 10, 13).and_hms(16, 49, 31);
+        let execute_at = Utc.ymd(2021, 10, 14).and_hms(16, 49, 31);
         let mut job = TestJob { i: 1 };
 
-        let mut entry = crate::CronEntry::new("30 * * * * * *", &mut job).unwrap();
+        let mut entry = crate::CronEntry::new(
+            &execute_at.format("30 %M %H %d %b %a %Y").to_string(),
+            &mut job,
+        ).unwrap();
         entry.tick(execute_at).unwrap();
 
         assert_eq!(job.i, 2);
